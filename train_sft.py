@@ -13,24 +13,6 @@ class SampleGenCallback(TrainerCallback):
         self.prompts = prompts
         self.max_new_tokens = max_new_tokens
 
-    # def on_evaluate(self, args, state, control, **kwargs):
-    #     print("callback", state.global_step)
-    #     #wandb.log("callback", state.global_step)
-    #     model = kwargs["model"]
-    #     model.eval()
-    #     texts = []
-    #     for p in self.prompts:
-    #         inputs = self.tokenizer(p, return_tensors="pt").to(model.device)
-    #         with torch.no_grad():
-    #             # これはなんのデータセットに対して検証してる？？
-    #             out = model.generate(**inputs, max_new_tokens=self.max_new_tokens)
-    #         texts.append(self.tokenizer.decode(out[0], skip_special_tokens=True))
-    #     table = wandb.Table(columns=["idx", "text"])
-    #     for i, t in enumerate(["foo", "bar"]):
-    #         table.add_data(i, t)
-
-    #     wandb.log({f"sample_{i}": t for i, t in enumerate(texts)})
-
     def on_evaluate(self, args, state, control, **kwargs):
         model = kwargs["model"]
         model.eval()
@@ -118,11 +100,11 @@ train_dataset = split["train"]
 valid_dataset = split["test"]
 test_dataset = ds["test"]
 
-print(ds["train"][0])
-print(ds["train"][0].keys())
-print(len(ds["train"][0]["input_ids"]))
-print(len(ds["train"][0]["attention_mask"]))
-#print(len(ds["train"][0]["labels"]))
+# print(ds["train"][0])
+# print(ds["train"][0].keys())
+# print(len(ds["train"][0]["input_ids"]))
+# print(len(ds["train"][0]["attention_mask"]))
+# #print(len(ds["train"][0]["labels"]))
 
 def extract_answer(text):
     m = re.search(r"####\s*([\-0-9,\.]+)", text)
@@ -165,18 +147,11 @@ args = TrainingArguments(
     report_to="wandb",
 )
 
-print("train_start")
-table = wandb.Table(columns=["idx", "text"])
-for i, t in enumerate(["foo", "bar"]):
-    table.add_data(i, t)
-
-wandb.log({"samples_debug": table})
 
 trainer = Trainer(model=model,
                 args=args,
                 train_dataset=train_dataset,
                 eval_dataset=valid_dataset,
-                #compute_metrics=compute_metrics,
                 data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
                 processing_class=tokenizer,
                 callbacks=[SampleGenCallback(tokenizer, prompts)]) 
