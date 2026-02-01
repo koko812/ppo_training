@@ -161,7 +161,8 @@ class SampleGenCallback(TrainerCallback):
         url = os.getenv("SLACK_WEBHOOK_URL")
         if not url:
             return
-        msg = {"text": f"train finished: step={state.global_step}, epoch={state.epoch}"}
+        run_url = wandb.run.get_url() if wandb.run else ""
+        msg = {"text": f"train finished: step={state.global_step}\n{run_url}"}
         requests.post(url, json=msg, timeout=10)
 
 total_step = int(math.ceil(len(train_dataset)/batch_size) * epoch)
