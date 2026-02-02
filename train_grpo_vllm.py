@@ -36,6 +36,11 @@ parser.add_argument("--epochs", type=int, default=3)
 parser.add_argument("--grad_accum", type=int, default=1)
 parser.add_argument("--run_name", type=str, default="")
 parser.add_argument("--num_gens", type=int, default=8)
+parser.add_argument("--vllm_memory", type=float, default=0.2)
+parser.add_argument("--server", action="store_true", help="use external vLLM server instead of colocate")
+parser.add_argument("--port", type=int, default=8000)
+parser.add_argument("--group_port", type=int, default=51216)
+parser.add_argument("--host_address", type=str, default="0.0.0.0")
 args = parser.parse_args()
 
 run_name = args.run_name + "_" + run_name_default
@@ -50,6 +55,7 @@ epoch = args.epochs
 grad_accum = args.grad_accum
 num_gens = args.num_gens
 model_name = args.model_name
+vllm_memory = args.vllm_memory
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.padding_side = "left"
@@ -195,15 +201,33 @@ class SlackNotifyCallback(TrainerCallback):
 
 
 # >> ------- train_settings ----------
+def make_vllm_kwargs(args):
+    if args.server:
+        # 外部 vLLM サーバ利用
+        return dict(
+            use_vllm=True,
+            vllm_server_port=args.port,
+            vllm_group_port=args.group_port,
+            vllm_server_host=args.host_address
+            # colocate は使わない
+        )
+    else:
+        # 従来の colocate モード
+        return dict(
+            use_vllm=True,
+            vllm_mode="colocate",
+            vllm_model_impl="vllm",
+            vllm_gpu_memory_utilization=args.vllm_memory,
+            vllm_max_model_length=512,
+        )
+
+vllm_kwargs = make_vllm_kwargs(args)
+
 
 config = GRPOConfig(
     output_dir=OUTPUT_DIR,
     do_train=True,
-    use_vllm=True,
-    vllm_mode="colocate",
-    vllm_model_impl="vllm",
-    vllm_gpu_memory_utilization=0.20,   # OOMしたら 0.2〜0.4 で調整
-    vllm_max_model_length=812,
+    **vllm_kwargs,
     use_transformers_paged=False,     # HF paged attention を切る
     cache_implementation=None,        # torch.compile/inductor 経路を避ける
     torch_compile=False,              # ★重要：Inductorを切る
@@ -218,8 +242,8 @@ config = GRPOConfig(
     save_steps=total_step // 5,
     learning_rate=lr,
     weight_decay=0,
-    max_prompt_length=300,
-    max_completion_length=512,
+    max_prompt_length=256,
+    max_completion_length=256,
     adam_epsilon=1e-8,
     # logging_dir="loggings",
     logging_steps=10,
